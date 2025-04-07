@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
-const FilterControls = ({ onApplyFilters, isLoading }) => {
+const FilterControls = React.memo(({ onApplyFilters, isLoading }) => {
   // Single active filter (like a radio button)
   const [activeFilter, setActiveFilter] = useState(null);
 
-  // Apply the active filter
-  useEffect(() => {
+  // Apply the active filter - memoized with useCallback
+  const applyFilter = useCallback(() => {
     let filterObject = {};
     
     // Build filter object based on active filter
     if (activeFilter === 'gender_female') {
-      filterObject = { gender: 'Female' };
+      filterObject = { gender: 'female' };
     } else if (activeFilter === 'is_graduate_learner') {
       filterObject = { is_graduate_learner: true };
     } else if (activeFilter === 'is_wage_employed') {
@@ -21,6 +21,11 @@ const FilterControls = ({ onApplyFilters, isLoading }) => {
     
     onApplyFilters(filterObject);
   }, [activeFilter, onApplyFilters]);
+
+  // Apply filter when activeFilter changes
+  useEffect(() => {
+    applyFilter();
+  }, [applyFilter]);
 
   // Toggle function now works like a radio button
   const toggleFilter = (filterName) => {
@@ -89,6 +94,6 @@ const FilterControls = ({ onApplyFilters, isLoading }) => {
       </div>
     </div>
   );
-};
+});
 
 export default FilterControls; 

@@ -86,7 +86,7 @@ curl -X POST http://localhost:8000/api/buildIndex \
   -H "Content-Type: application/json" \
   -d '{
     "filters": {
-      "gender": "Female",
+      "gender": "female",
       "is_graduate_learner": true
     }
   }'

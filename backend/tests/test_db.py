@@ -21,7 +21,7 @@ SAMPLE_DB_POINTS = [
         'country_of_residence': 'Kenya',
         'latitude': 1.2921,
         'longitude': 36.8219,
-        'gender': 'Female',
+        'gender': 'female',
         'is_graduate_learner': 1,
         'is_wage_employed': 0,
         'is_running_a_venture': 1,
@@ -33,7 +33,7 @@ SAMPLE_DB_POINTS = [
         'country_of_residence': 'Nigeria',
         'latitude': 9.0820,
         'longitude': 8.6753,
-        'gender': 'Male',
+        'gender': 'male',
         'is_graduate_learner': 1,
         'is_wage_employed': 1,
         'is_running_a_venture': 0,
@@ -100,7 +100,7 @@ def test_load_learner_points_with_filters(mock_execute_query):
     
     # Create filters
     filters = {
-        'gender': 'Female',
+        'gender': 'female',
         'is_graduate_learner': True
     }
     
@@ -115,7 +115,7 @@ def test_load_learner_points_with_filters(mock_execute_query):
     args = mock_execute_query.call_args[0]
     assert "gender = %s" in args[0]
     assert "is_graduate_learner = %s" in args[0]
-    assert ('Female', 1) == args[1]
+    assert ('female', 1) == args[1]
 
 def test_convert_to_geojson():
     """Test converting database points to GeoJSON format"""
@@ -131,7 +131,7 @@ def test_convert_to_geojson():
     assert geojson_features[0]['geometry']['coordinates'] == [36.8219, 1.2921]
     assert geojson_features[0]['properties']['id'] == 'user1'
     assert geojson_features[0]['properties']['country'] == 'Kenya'
-    assert geojson_features[0]['properties']['gender'] == 'Female'
+    assert geojson_features[0]['properties']['gender'] == 'female'
     assert geojson_features[0]['properties']['is_graduate'] == True
     assert geojson_features[0]['properties']['is_employed'] == False
     assert geojson_features[0]['properties']['is_entrepreneur'] == True
@@ -139,7 +139,7 @@ def test_convert_to_geojson():
     # Check second feature
     assert geojson_features[1]['geometry']['coordinates'] == [8.6753, 9.0820]
     assert geojson_features[1]['properties']['country'] == 'Nigeria'
-    assert geojson_features[1]['properties']['gender'] == 'Male'
+    assert geojson_features[1]['properties']['gender'] == 'male'
 
 def test_convert_to_geojson_missing_coordinates():
     """Test converting point with missing coordinates"""
@@ -147,7 +147,7 @@ def test_convert_to_geojson_missing_coordinates():
         'hashed_email': 'user3',
         'country_of_residence': 'Ghana',
         # Missing latitude and longitude
-        'gender': 'Male'
+        'gender': 'male'
     }
     
     # Call function
@@ -162,15 +162,15 @@ def test_generate_filter_key():
     assert generate_filter_key({}) == "all"
     
     # Test with single filter
-    assert generate_filter_key({'gender': 'Male'}) == "gender=Male"
+    assert generate_filter_key({'gender': 'male'}) == "gender=male"
     
     # Test with multiple filters
     filters = {
-        'gender': 'Female',
+        'gender': 'female',
         'is_graduate_learner': True,
         'country_of_residence': 'Kenya'
     }
-    expected_key = "country_of_residence=Kenya_gender=Female_is_graduate_learner=1"
+    expected_key = "country_of_residence=Kenya_gender=female_is_graduate_learner=1"
     assert generate_filter_key(filters) == expected_key
     
     # Test with boolean filters

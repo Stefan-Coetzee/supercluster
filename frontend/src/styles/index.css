@@ -68,6 +68,15 @@ code {
   font-size: 12px;
   z-index: 5;
   text-align: center;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.fetch-info {
+  color: #666;
+  font-style: italic;
 }
 
 .map-controls {

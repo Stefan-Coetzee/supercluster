@@ -13,6 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "pysupercluster"))
 import pysupercluster
 
 from db import load_learner_points, convert_to_geojson, generate_filter_key
+from constants import FIELD_MAPPING, FILTER_TYPES
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -67,13 +68,13 @@ class IndexManager:
         
         # Check cache first
         if index_key in self.indexes and not force_refresh:
-            logger.debug(f"Cache hit for {index_key}")
+            #logger.debug(f"Cache hit for {index_key}")
             return index_key, self.indexes[index_key]
         
         # If all data is already loaded and we need a filtered subset
         if self.geojson_cache.get("all") and filters:
             # Filter the in-memory GeoJSON
-            logger.debug(f"Filtering in-memory data for {index_key}")
+            #logger.debug(f"Filtering in-memory data for {index_key}")
             filtered_geojson = self._filter_geojson(self.geojson_cache["all"], filters)
             
             # Create new index from filtered data
@@ -100,24 +101,24 @@ class IndexManager:
             start_time = time.time()
             db_points = load_learner_points(filters=filters)
             db_time = time.time() - start_time
-            logger.info(f"Loaded {len(db_points)} points from database in {db_time:.2f} seconds")
+           #logger.info(f"Loaded {len(db_points)} points from database in {db_time:.2f} seconds")
             
             # Record post-db load memory
             post_db_memory = get_memory_usage()
             self.memory_usage.append({"timestamp": time.time(), "memory_mb": post_db_memory, "event": f"post_db_load_{index_key}"})
-            logger.debug(f"Memory after DB load: {post_db_memory:.2f} MB (increase: {post_db_memory - pre_memory:.2f} MB)")
+            #logger.debug(f"Memory after DB load: {post_db_memory:.2f} MB (increase: {post_db_memory - pre_memory:.2f} MB)")
             
             # Convert to GeoJSON
             start_time = time.time()
             geojson_features = convert_to_geojson(db_points)
             self.geojson_cache[index_key] = geojson_features
             geojson_time = time.time() - start_time
-            logger.info(f"Converted to {len(geojson_features)} GeoJSON features in {geojson_time:.2f} seconds")
+            #logger.info(f"Converted to {len(geojson_features)} GeoJSON features in {geojson_time:.2f} seconds")
             
             # Record post-geojson memory
             post_geojson_memory = get_memory_usage()
             self.memory_usage.append({"timestamp": time.time(), "memory_mb": post_geojson_memory, "event": f"post_geojson_{index_key}"})
-            logger.debug(f"Memory after GeoJSON conversion: {post_geojson_memory:.2f} MB (increase: {post_geojson_memory - post_db_memory:.2f} MB)")
+            #logger.debug(f"Memory after GeoJSON conversion: {post_geojson_memory:.2f} MB (increase: {post_geojson_memory - post_db_memory:.2f} MB)")
             
             # Free up some memory
             del db_points
@@ -138,7 +139,7 @@ class IndexManager:
             # Record post-index memory
             post_index_memory = get_memory_usage()
             self.memory_usage.append({"timestamp": time.time(), "memory_mb": post_index_memory, "event": f"post_index_{index_key}"})
-            logger.debug(f"Memory after index creation: {post_index_memory:.2f} MB (increase: {post_index_memory - post_geojson_memory:.2f} MB)")
+            #logger.debug(f"Memory after index creation: {post_index_memory:.2f} MB (increase: {post_index_memory - post_geojson_memory:.2f} MB)")
             
             # Cache the index
             self.indexes[index_key] = index
@@ -259,25 +260,41 @@ class IndexManager:
             return geojson_features
             
         filtered = []
+        logger.debug(f"Starting filtering with {len(geojson_features)} features and filters: {filters}")
+        
         for feature in geojson_features:
             properties = feature["properties"]
             include = True
             
             for key, value in filters.items():
-                if key == "gender" or key == "country_of_residence":
-                    if properties.get(key) != value:
+                # Map the database field name to GeoJSON property name
+                property_name = FIELD_MAPPING.get(key, key)
+                property_value = properties.get(property_name)
+                logger.debug(f"Checking filter {key}={value} against property {property_name}={property_value}")
+                
+                if key in FILTER_TYPES['string_filters']:
+                    if property_value != value:
                         include = False
+                        logger.debug(f"Excluding feature due to {property_name} mismatch")
                         break
-                elif key in ["is_graduate_learner", "is_wage_employed", 
-                             "is_running_a_venture", "is_featured", "is_featured_video"]:
-                    if bool(properties.get(key)) != bool(value):
+                elif key in FILTER_TYPES['boolean_filters']:
+                    # Convert filter value to int for comparison
+                    filter_value = 1 if value else 0
+                    if property_value != filter_value:
                         include = False
+                        logger.debug(f"Excluding feature due to {property_name} mismatch")
                         break
             
             if include:
                 filtered.append(feature)
                 
         logger.info(f"Filtered {len(geojson_features)} features to {len(filtered)}")
+        if len(filtered) == 0:
+            logger.warning("No features passed the filter criteria")
+            # Log a sample feature for debugging
+            if geojson_features:
+                logger.debug(f"Sample feature that was filtered out: {geojson_features[0]}")
+        
         return filtered
 
 # Global index manager instance

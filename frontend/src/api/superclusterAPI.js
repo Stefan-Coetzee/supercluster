@@ -5,12 +5,18 @@ const API_BASE_URL = '/api';
 export const superclusterAPI = {
   // Get clusters for a specific bounding box and zoom level
   getClusters: async (bbox, zoom, filters = {}) => {
+    console.log(`API Request: getClusters at ${new Date().toLocaleTimeString()} - zoom: ${zoom}, bbox: [${bbox.join(', ')}]`);
+    console.log(`Filters:`, filters);
+    
     try {
+      const startTime = performance.now();
       const response = await axios.post(`${API_BASE_URL}/getClusters`, {
         bbox,
         zoom,
         filters
       });
+      const endTime = performance.now();
+      console.log(`API Response received in ${(endTime - startTime).toFixed(0)}ms`);
       return response.data;
     } catch (error) {
       console.error('Error getting clusters:', error);

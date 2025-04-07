@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import './styles/index.css';
 import Map from './components/Map';
 import LayerToggle from './components/LayerToggle';
@@ -23,14 +23,14 @@ function App() {
     setActiveLayers([layerId]);
   };
 
-  // Apply filters
-  const handleApplyFilters = (newFilters) => {
+  // Apply filters - memoized with useCallback
+  const handleApplyFilters = useCallback((newFilters) => {
     setIsLoading(true);
     setFilters(newFilters);
     
     // Loading state will be managed by the Map component
     setTimeout(() => setIsLoading(false), 500);
-  };
+  }, []); // Empty dependency array since it only uses setState functions which are stable
 
   // Toggle controls panel
   const toggleControls = () => {

@@ -4,6 +4,7 @@ import logging
 import time
 from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional, Tuple
+from constants import FIELD_MAPPING, REVERSE_FIELD_MAPPING
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Set default data limit (for preloading)
-DEFAULT_DATA_LIMIT = 1000 # Limit to 10k rows instead of all 1.4M
+DEFAULT_DATA_LIMIT = 10000000 # Limit to 10k rows instead of all 1.4M
 
 # Database connection parameters
 DB_CONFIG = {
@@ -146,6 +147,17 @@ def convert_to_geojson(points: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if not point.get('latitude') or not point.get('longitude'):
             continue
             
+        # Create properties dict using field mapping
+        properties = {
+            "id": point.get('hashed_email', ''),
+            "full_name": point.get('full_name', '')
+        }
+        
+        # Add mapped fields
+        for geojson_key, db_key in REVERSE_FIELD_MAPPING.items():
+            if db_key in point:
+                properties[geojson_key] = point[db_key]
+        
         # Create GeoJSON Feature
         feature = {
             "type": "Feature",
@@ -153,16 +165,7 @@ def convert_to_geojson(points: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "type": "Point",
                 "coordinates": [float(point['longitude']), float(point['latitude'])]
             },
-            "properties": {
-                "id": point.get('hashed_email', ''),
-                "country": point.get('country_of_residence', ''),
-                "gender": point.get('gender', ''),
-                "is_graduate": bool(point.get('is_graduate_learner', 0)),
-                "is_employed": bool(point.get('is_wage_employed', 0)),
-                "is_entrepreneur": bool(point.get('is_running_a_venture', 0)),
-                "is_featured": bool(point.get('is_featured', 0)),
-                "has_video": bool(point.get('is_featured_video', 0))
-            }
+            "properties": properties
         }
         
         features.append(feature)

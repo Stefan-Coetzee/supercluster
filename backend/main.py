@@ -21,7 +21,7 @@ from db import convert_to_geojson, generate_filter_key
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
@@ -82,7 +82,7 @@ class ClusterOptions(BaseModel):
     """Options for creating a supercluster index"""
     minZoom: int = Field(0, description="Minimum zoom level at which clusters are generated")
     maxZoom: int = Field(16, description="Maximum zoom level at which clusters are generated")
-    minPoints: int = Field(2, description="Minimum number of points to form a cluster")
+    minPoints: int = Field(10, description="Minimum number of points to form a cluster")
     radius: int = Field(40, description="Cluster radius, in pixels")
     extent: int = Field(512, description="Tile extent. Radius is calculated relative to this value")
     nodeSize: int = Field(64, description="Size of the KD-tree leaf node. Affects performance")
@@ -346,7 +346,7 @@ async def clear_cache():
 async def get_available_filters():
     """Get information about available filters"""
     return {
-        "genders": ["Male", "Female", "Other", "Unknown"],  # Example values
+        "genders": ["male", "female", "other", "unknown"],  # Example values
         "filters": {
             "gender": "Filter by gender (e.g., Male, Female)",
             "country_of_residence": "Filter by country name",
