@@ -7,6 +7,7 @@ import logging
 import gc
 import psutil
 import traceback
+from pympler import asizeof
 
 # Add the pysupercluster directory to the path so we can import it
 sys.path.append(os.path.join(os.path.dirname(__file__), "pysupercluster"))
@@ -42,7 +43,7 @@ class IndexManager:
         self.max_zoom = max_zoom
         self.radius = radius
         self.extent = extent
-        
+
         # Cache for indexes based on filter combinations
         self.indexes = {}
         
@@ -111,6 +112,10 @@ class IndexManager:
             # Convert to GeoJSON
             start_time = time.time()
             geojson_features = convert_to_geojson(db_points)
+            geojson_size_mb = asizeof.asizeof(geojson_features) / (1024 * 1024)
+            db_points_size_mb = asizeof.asizeof(db_points) / (1024 * 1024)
+            logger.info(f"Original data size: {db_points_size_mb:.2f} MB, GeoJSON size: {geojson_size_mb:.2f} MB")
+            
             self.geojson_cache[index_key] = geojson_features
             geojson_time = time.time() - start_time
             #logger.info(f"Converted to {len(geojson_features)} GeoJSON features in {geojson_time:.2f} seconds")
@@ -194,7 +199,7 @@ class IndexManager:
             min_zoom=self.min_zoom,
             max_zoom=self.max_zoom,
             radius=self.radius,
-            extent=self.extent
+            extent=self.extent,
         )
         index_time = time.time() - start_time
         logger.info(f"Created SuperCluster index with {len(points_array)} points in {index_time:.2f} seconds")
@@ -220,13 +225,32 @@ class IndexManager:
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics"""
         current_memory = get_memory_usage()
+        
+        # Calculate memory usage by object type
+        try:
+            object_sizes = {
+                "geojson_cache_size_mb": round(asizeof.asizeof(self.geojson_cache) / (1024 * 1024), 2),
+                "indexes_size_mb": round(asizeof.asizeof(self.indexes) / (1024 * 1024), 2),
+                "geojson_entries": {}
+            }
+            
+            # Get detailed size for each GeoJSON entry
+            for key, value in self.geojson_cache.items():
+                object_sizes["geojson_entries"][key] = {
+                    "size_mb": round(asizeof.asizeof(value) / (1024 * 1024), 2),
+                    "feature_count": len(value)
+                }
+        except ImportError:
+            object_sizes = {"error": "pympler not installed"}
+        
         stats = {
             "cache_hits": self.cache_hits,
             "cache_misses": self.cache_misses,
             "cached_indexes": len(self.indexes),
             "cache_ratio": f"{self.cache_hits/(self.cache_hits + self.cache_misses):.2f}" if (self.cache_hits + self.cache_misses) > 0 else "N/A",
             "current_memory_mb": f"{current_memory:.2f}",
-            "memory_history": self.memory_usage
+            "memory_history": self.memory_usage,
+            "object_memory": object_sizes
         }
         logger.debug(f"Current memory usage: {current_memory:.2f} MB")
         return stats
@@ -299,3 +323,39 @@ class IndexManager:
 
 # Global index manager instance
 index_manager = IndexManager() 
+
+def get_object_sizes():
+    """Calculate memory usage for key data structures"""
+    # Get the global index manager
+    from index_manager import index_manager
+    
+    sizes = {
+        "total_indexes_mb": 0,
+        "total_geojson_mb": 0,
+        "geojson_details": {},
+        "index_details": {}
+    }
+    
+    # Calculate GeoJSON cache sizes
+    for key, geojson in index_manager.geojson_cache.items():
+        # Get deep size (includes all referenced objects)
+        size_mb = asizeof.asizeof(geojson) / (1024 * 1024)
+        sizes["geojson_details"][key] = {
+            "size_mb": round(size_mb, 2),
+            "feature_count": len(geojson)
+        }
+        sizes["total_geojson_mb"] += size_mb
+    
+    # Calculate index sizes
+    for key, index in index_manager.indexes.items():
+        size_mb = asizeof.asizeof(index) / (1024 * 1024)
+        sizes["index_details"][key] = {
+            "size_mb": round(size_mb, 2)
+        }
+        sizes["total_indexes_mb"] += size_mb
+    
+    # Round totals
+    sizes["total_geojson_mb"] = round(sizes["total_geojson_mb"], 2)
+    sizes["total_indexes_mb"] = round(sizes["total_indexes_mb"], 2)
+    
+    return sizes

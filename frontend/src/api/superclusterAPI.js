@@ -10,11 +10,22 @@ export const superclusterAPI = {
     
     try {
       const startTime = performance.now();
-      const response = await axios.post(`${API_BASE_URL}/getClusters`, {
-        bbox,
+      
+      // Unpack bbox into individual coordinates
+      const [west, south, east, north] = bbox;
+      
+      // Build query parameters
+      const params = {
+        west,
+        south,
+        east,
+        north,
         zoom,
-        filters
-      });
+        ...filters  // Spread filter parameters
+      };
+      
+      const response = await axios.get(`${API_BASE_URL}/getClusters`, { params });
+      
       const endTime = performance.now();
       console.log(`API Response received in ${(endTime - startTime).toFixed(0)}ms`);
       return response.data;

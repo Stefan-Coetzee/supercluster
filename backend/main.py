@@ -82,8 +82,8 @@ class ClusterOptions(BaseModel):
     """Options for creating a supercluster index"""
     minZoom: int = Field(0, description="Minimum zoom level at which clusters are generated")
     maxZoom: int = Field(16, description="Maximum zoom level at which clusters are generated")
-    minPoints: int = Field(10, description="Minimum number of points to form a cluster")
-    radius: int = Field(40, description="Cluster radius, in pixels")
+    minPoints: int = Field(100, description="Minimum number of points to form a cluster")
+    radius: int = Field(80, description="Cluster radius, in pixels")
     extent: int = Field(512, description="Tile extent. Radius is calculated relative to this value")
     nodeSize: int = Field(64, description="Size of the KD-tree leaf node. Affects performance")
     log: bool = Field(False, description="Whether timing info should be logged")
@@ -169,7 +169,8 @@ async def load_points(index_id: str, features: List[Dict[str, Any]], options: Cl
             min_zoom=options.minZoom,
             max_zoom=options.maxZoom,
             radius=options.radius,
-            extent=options.extent
+            extent=options.extent,
+            min_points=options.minPoints
         )
         
         # Store the index for future use
@@ -185,28 +186,45 @@ async def load_points(index_id: str, features: List[Dict[str, Any]], options: Cl
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating index: {str(e)}")
 
-@app.post("/api/getClusters", response_model=ClusterResponse)
-async def get_clusters(request: ClusterRequest):
+@app.get("/api/getClusters", response_model=ClusterResponse)
+async def get_clusters(
+    west: float = Query(..., description="West longitude of bounding box"),
+    south: float = Query(..., description="South latitude of bounding box"),
+    east: float = Query(..., description="East longitude of bounding box"),
+    north: float = Query(..., description="North latitude of bounding box"),
+    zoom: int = Query(..., description="Zoom level"),
+    gender: Optional[str] = Query(None, description="Filter by gender"),
+    country_of_residence: Optional[str] = Query(None, description="Filter by country"),
+    is_graduate_learner: Optional[bool] = Query(None, description="Filter by graduate status"),
+    is_wage_employed: Optional[bool] = Query(None, description="Filter by employment status"),
+    is_running_a_venture: Optional[bool] = Query(None, description="Filter by entrepreneurship status"),
+    is_featured: Optional[bool] = Query(None, description="Filter by featured status"),
+    is_featured_video: Optional[bool] = Query(None, description="Filter by featured video status")
+):
     """
     Get clusters for a specific bounding box and zoom level with optional filters
     """
     start_time = time.time()
     
-    # Convert filters to dict, removing None values
-    filter_dict = {}
-    if request.filters:
-        if hasattr(request.filters, 'model_dump'):
-            filter_dict = {k: v for k, v in request.filters.model_dump().items() if v is not None}
-        else:
-            # For backward compatibility
-            filter_dict = {k: v for k, v in request.filters.dict().items() if v is not None}
+    # Build filter dictionary from query parameters
+    filter_dict = {
+        'gender': gender,
+        'country_of_residence': country_of_residence,
+        'is_graduate_learner': is_graduate_learner,
+        'is_wage_employed': is_wage_employed,
+        'is_running_a_venture': is_running_a_venture,
+        'is_featured': is_featured,
+        'is_featured_video': is_featured_video
+    }
+    # Remove None values
+    filter_dict = {k: v for k, v in filter_dict.items() if v is not None}
     
     try:
         # Get or create filtered index (now uses in-memory filtering)
         index_key, index = index_manager.get_index(filter_dict)
         
-        bbox = request.bbox
-        zoom = request.zoom
+        # Construct bbox from individual parameters
+        bbox = [west, south, east, north]
         
         # Convert bbox from [westLng, southLat, eastLng, northLat] to format expected by pysupercluster
         top_left = (bbox[0], bbox[3])  # (west, north)
