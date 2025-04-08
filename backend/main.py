@@ -10,6 +10,7 @@ import logging
 import time
 from fastapi.middleware.cors import CORSMiddleware
 import traceback
+from contextlib import asynccontextmanager
 
 # Add the pysupercluster directory to the path so we can import it
 sys.path.append(os.path.join(os.path.dirname(__file__), "pysupercluster"))
@@ -27,10 +28,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup code
+    logger.info("Starting application, preloading all data...")
+    try:
+        start_time = time.time()
+        index_key, _ = index_manager.get_index({})
+        elapsed = time.time() - start_time
+        logger.info(f"Preloaded all data with key: {index_key} in {elapsed:.2f} seconds")
+        memory_stats = index_manager.get_stats()
+        logger.info(f"Memory usage after preload: {memory_stats['current_memory_mb']} MB")
+    except Exception as e:
+        logger.error(f"Error during preloading: {str(e)}")
+        logger.error(traceback.format_exc())
+    
+    yield  # Server is running
+    
+    # Shutdown code here if needed
+
 app = FastAPI(
     title="SuperCluster API",
     description="A FastAPI implementation of geospatial clustering with database integration",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 # Add CORS middleware
@@ -41,25 +62,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Preload data at startup
-@app.on_event("startup")
-async def startup_event():
-    """Preload ALL data at startup and keep in memory"""
-    logger.info("Starting application, preloading all data...")
-    try:
-        start_time = time.time()
-        # Force loading all data without filtering
-        index_key, _ = index_manager.get_index({})
-        elapsed = time.time() - start_time
-        logger.info(f"Preloaded all data with key: {index_key} in {elapsed:.2f} seconds")
-        
-        # Log memory usage
-        memory_stats = index_manager.get_stats()
-        logger.info(f"Memory usage after preload: {memory_stats['current_memory_mb']} MB")
-    except Exception as e:
-        logger.error(f"Error during preloading: {str(e)}")
-        logger.error(traceback.format_exc())
 
 class GeoPoint(BaseModel):
     """GeoJSON-compatible point representation"""

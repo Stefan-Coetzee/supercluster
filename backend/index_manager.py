@@ -69,7 +69,7 @@ class IndexManager:
         
         # Check cache first
         if index_key in self.indexes and not force_refresh:
-            #logger.debug(f"Cache hit for {index_key}")
+            self.cache_hits += 1
             return index_key, self.indexes[index_key]
         
         # If all data is already loaded and we need a filtered subset
@@ -192,6 +192,8 @@ class IndexManager:
         """
         if len(points_array) == 0:
             logger.warning("Creating index with empty points array")
+            # Return a dummy index that returns empty results
+            return DummyClusterIndex()
             
         start_time = time.time()
         index = pysupercluster.SuperCluster(
@@ -359,3 +361,9 @@ def get_object_sizes():
     sizes["total_indexes_mb"] = round(sizes["total_indexes_mb"], 2)
     
     return sizes
+
+# Add this class to handle empty results
+class DummyClusterIndex:
+    """A dummy index that returns empty results for when no points match filters"""
+    def getClusters(self, top_left, bottom_right, zoom):
+        return []

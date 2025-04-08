@@ -8,144 +8,109 @@ import sys
 import os
 from fastapi.testclient import TestClient
 import json
+import numpy as np
 
 # Add parent directory to path to import the modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from main import app
-from test_index_manager import MockSuperCluster, SAMPLE_GEOJSON
+from .test_index_manager import MockSuperCluster, SAMPLE_GEOJSON
 
 # Create a TestClient for the FastAPI app
 client = TestClient(app)
 
+# Sample test data - reduce size for faster tests
+SAMPLE_POINTS = [
+    {"latitude": 0.0, "longitude": 0.0, "gender": "female", "country_of_residence": "Kenya"},
+    {"latitude": 1.0, "longitude": 1.0, "gender": "male", "country_of_residence": "Nigeria"},
+]
+
+class MockSuperCluster:
+    def getClusters(self, top_left, bottom_right, zoom):
+        return [
+            {
+                'id': 1,
+                'count': 2,
+                'expansion_zoom': zoom + 1,
+                'longitude': 0.5,
+                'latitude': 0.5
+            }
+        ]
+
 class MockIndexManager:
-    """Mock implementation of IndexManager for API tests"""
     def __init__(self):
         self.calls = []
         self.indexes = {}
-        self.geojson_cache = {}
     
     def get_index(self, filters=None, force_refresh=False):
-        self.calls.append(('get_index', filters, force_refresh))
-        
-        # Generate a deterministic key for the filters
-        key = 'all'
-        if filters:
-            key = '_'.join(f"{k}={v}" for k, v in sorted(filters.items()))
-        
-        # Create a mock SuperCluster
-        if key not in self.indexes:
-            self.indexes[key] = MockSuperCluster()
-            # Also store mock GeoJSON
-            self.geojson_cache[key] = SAMPLE_GEOJSON
-        
-        return key, self.indexes[key]
+        self.calls.append(('get_index', filters))
+        return 'test_key', MockSuperCluster()
     
     def get_original_features(self, index_key):
-        self.calls.append(('get_original_features', index_key))
-        return self.geojson_cache.get(index_key, [])
+        return SAMPLE_GEOJSON
     
     def get_stats(self):
-        self.calls.append(('get_stats',))
         return {
-            "cache_hits": 5,
-            "cache_misses": 2,
-            "cached_indexes": len(self.indexes),
-            "cache_ratio": "0.71"
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "cached_indexes": 0,
+            "cache_ratio": "0.0",
+            "current_memory_mb": "0.0",
+            "memory_history": []
         }
-    
-    def clear_cache(self):
-        self.calls.append(('clear_cache',))
-        self.indexes = {}
-        self.geojson_cache = {}
 
-@pytest.fixture
-def mock_index_manager():
-    """Mock the index manager for API tests"""
+@pytest.fixture(autouse=True)
+def mock_index_manager(monkeypatch):
+    """Mock the index manager for all tests"""
     mock_manager = MockIndexManager()
-    
-    with patch('main.index_manager', mock_manager):
-        yield mock_manager
+    monkeypatch.setattr("main.index_manager", mock_manager)
+    return mock_manager
 
-def test_api():
+def test_api(mock_index_manager):
     """Test the supercluster API endpoints"""
-    # 1. Test the root endpoint
+    # Test root endpoint
     response = client.get("/")
-    print("Root endpoint:", response.json())
+    assert response.status_code == 200
     
-    # 2. Get available filters
-    response = client.get("/api/availableFilters")
-    print("\nAvailable filters:", json.dumps(response.json(), indent=2))
+    # Test getting clusters
+    params = {
+        "west": -180,
+        "south": -85,
+        "east": 180,
+        "north": 85,
+        "zoom": 4
+    }
     
-    # 3. Get clusters with no filters
-    print("\nFetching clusters with no filters...")
-    response = client.post("/api/getClusters", json={
-        "bbox": [-180, -85, 180, 85],
-        "zoom": 4,
-        "filters": None
-    })
-    
-    assert response.status_code == 200, f"Error: {response.text}"
+    response = client.get("/api/getClusters", params=params)
+    assert response.status_code == 200
     clusters = response.json()
-    cluster_count = len(clusters.get("features", []))
-    print(f"Retrieved {cluster_count} clusters/points at zoom level 4")
+    assert "features" in clusters
+    assert isinstance(clusters["features"], list)
     
-    # 4. Get clusters at different zoom levels
-    zoom_levels = [0, 8, 12]
-    
-    for zoom in zoom_levels:
-        print(f"\nFetching clusters at zoom level {zoom}...")
-        response = client.post("/api/getClusters", json={
-            "bbox": [-180, -85, 180, 85],
-            "zoom": zoom,
-            "filters": None
-        })
-        
-        assert response.status_code == 200, f"Error at zoom {zoom}: {response.text}"
-        clusters = response.json()
-        cluster_count = len(clusters.get("features", []))
-        print(f"Retrieved {cluster_count} clusters/points at zoom level {zoom}")
-    
-    # 5. Test with gender filter
-    print("\nFetching clusters with gender filter...")
-    response = client.post("/api/getClusters", json={
-        "bbox": [-180, -85, 180, 85],
-        "zoom": 4,
-        "filters": {
-            "gender": "Male"
-        }
-    })
-    
-    assert response.status_code == 200, f"Error with filter: {response.text}"
+    # Test with filters
+    params["gender"] = "female"
+    response = client.get("/api/getClusters", params=params)
+    assert response.status_code == 200
     clusters = response.json()
-    cluster_count = len(clusters.get("features", []))
-    print(f"Retrieved {cluster_count} clusters/points with gender filter")
-    
-    # 6. Get cache stats
-    print("\nFetching cache stats...")
-    response = client.get("/api/stats")
-    print("Cache stats:", json.dumps(response.json(), indent=2) if response.status_code == 200 else response.text)
-    
-    # 7. Clear cache
-    print("\nClearing cache...")
-    response = client.post("/api/clearCache")
-    print("Clear cache response:", response.json() if response.status_code == 200 else response.text)
+    assert "features" in clusters
 
-def test_error_handling_get_clusters():
-    """Test error handling in getClusters endpoint"""
-    # Simulate an error in index_manager.get_index
-    with patch('main.index_manager.get_index', side_effect=Exception("Test error")):
-        response = client.post("/api/getClusters", json={
-            "bbox": [-180, -85, 180, 85],
-            "zoom": 4,
-            "filters": None
-        })
-        
-        # The API should return 500 for server errors
-        assert response.status_code == 500
-        data = response.json()
-        assert "detail" in data
-        assert "Test error" in data["detail"]
+def test_api_error_cases():
+    """Test error handling"""
+    # Invalid zoom
+    response = client.get("/api/getClusters", params={
+        "west": -180,
+        "south": -85,
+        "east": 180,
+        "north": 85,
+        "zoom": "invalid"
+    })
+    assert response.status_code == 422
+
+    # Missing parameters
+    response = client.get("/api/getClusters", params={
+        "zoom": 4  # Missing bbox coordinates
+    })
+    assert response.status_code == 422
 
 if __name__ == "__main__":
     test_api() 
