@@ -1,6 +1,6 @@
 #FastAPI implementation of supercluster
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends, Header, Security
 from pydantic import BaseModel, Field
 from typing import List, Tuple, Dict, Optional, Any, Union
 import numpy as np
@@ -11,6 +11,32 @@ import time
 from fastapi.middleware.cors import CORSMiddleware
 import traceback
 from contextlib import asynccontextmanager
+from fastapi.security.api_key import APIKeyHeader
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Get API key from environment
+API_KEY = os.getenv("API_KEY", "your-default-api-key")
+API_KEY_NAME = "X-API-Key"
+
+# Define security scheme
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+# Define dependency
+async def get_api_key(api_key: str = Security(api_key_header)):
+    if not api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="API Key header missing"
+        )
+    if api_key != API_KEY:
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid API Key"
+        )
+    return api_key
 
 # Add the pysupercluster directory to the path so we can import it
 sys.path.append(os.path.join(os.path.dirname(__file__), "pysupercluster"))
@@ -188,7 +214,7 @@ async def load_points(index_id: str, features: List[Dict[str, Any]], options: Cl
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating index: {str(e)}")
 
-@app.get("/api/getClusters", response_model=ClusterResponse)
+@app.get("/api/getClusters", response_model=ClusterResponse, dependencies=[Depends(get_api_key)])
 async def get_clusters(
     west: float = Query(..., description="West longitude of bounding box"),
     south: float = Query(..., description="South latitude of bounding box"),
@@ -351,12 +377,12 @@ async def root():
         "description": "FastAPI implementation of geospatial point clustering with database integration"
     }
 
-@app.get("/api/stats")
+@app.get("/api/stats", dependencies=[Depends(get_api_key)])
 async def get_stats():
     """Get supercluster cache statistics"""
     return index_manager.get_stats()
 
-@app.post("/api/clearCache")
+@app.post("/api/clearCache", dependencies=[Depends(get_api_key)])
 async def clear_cache():
     """Clear the supercluster index cache"""
     index_manager.clear_cache()

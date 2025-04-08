@@ -37,6 +37,7 @@ frontend/.env.local
 .env.test.local
 .env.production.local
 .vercel
+.env
 .coverage
 htmlcov/
 
@@ -90,3 +91,12 @@ backend/pysupercluster/__pycache__/
 frontend/build/
 frontend/dist/
 .cache/
+backend/.env
+
+# Environment variables
+.env
+.env.*
+*.env
+backend/.env
+frontend/.env
+frontend/.env.local
